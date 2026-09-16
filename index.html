@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Crop Irrigation Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root {
+      --bg1: #1b5e20;
+      --bg2: #4caf50;
+      --card: rgba(255,255,255,.15);
+      --text: #fff;
+      --accent: #ffeb3b;
+    }
+
+    body.dark {
+      --bg1: #101820;
+      --bg2: #263238;
+      --card: rgba(255,255,255,.09);
+      --text: #f5f5f5;
+      --accent: #80cbc4;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: Arial, sans-serif;
+      color: var(--text);
+      background: linear-gradient(135deg, var(--bg1), var(--bg2));
+    }
+
+    header, .topbar, .dashboard, .chart-container {
+      max-width: 1100px;
+      margin: 20px auto;
+    }
+
+    header { text-align: center; }
+    h1 { font-size: 28px; }
+    .subtitle, .small { opacity: .85; }
+    .small { font-size: 13px; }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+
+    .card, .chart-container {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 4px 10px rgba(0,0,0,.12);
+      min-width: 0;
+    }
+
+    .card h2, .chart-container h2 {
+      font-size: 17px;
+      margin-top: 0;
+    }
+
+    .value {
+      font-size: 30px;
+      font-weight: bold;
+      margin: 12px 0;
+      overflow-wrap: anywhere;
+    }
+
+    .status {
+      max-width: 700px;
+      margin: 20px auto;
+      padding: 14px;
+      text-align: center;
+      border-radius: 12px;
+      font-weight: bold;
+      background: #2e7d32;
+    }
+
+    .status.warning { background: #a65e00; }
+    .status.danger { background: #b71c1c; }
+
+    .pump {
+      text-align: center;
+      margin: 20px;
+      font-size: 18px;
+    }
+
+    .pump-indicator {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      margin-right: 8px;
+      background: #757575;
+    }
+
+    .pump-indicator.on { background: #00e676; }
+
+    button, input, select { font: inherit; }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 11px 16px;
+      margin: 5px;
+      background: var(--accent);
+      color: #17351c;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid white;
+      outline-offset: 3px;
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #aaa;
+      border-radius: 8px;
+      margin: 7px 0 14px;
+      background: #fff;
+      color: #17251a;
+    }
+
+    input[type="range"] {
+      padding: 0;
+      accent-color: var(--accent);
+    }
+
+    label {
+      display: block;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    .chart-container { max-width: 800px; }
+    .chart-wrap { position: relative; height: 260px; }
+    .section-title { text-align: center; margin-top: 35px; }
+    .footer { text-align: center; font-size: 12px; opacity: .8; margin: 30px auto; }
+
+    .doctor-card {
+      border: 1px solid rgba(255,255,255,.35);
+    }
+
+    .doctor-card .value { font-size: 23px; }
+
+    @media(max-width: 480px) {
+      body { padding: 10px; }
+      h1 { font-size: 23px; }
+      .card, .chart-container { padding: 16px; }
+      .chart-wrap { height: 220px; }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>🌱 Smart Crop Irrigation Dashboard</h1>
+    <p class="subtitle">Smart water monitoring and irrigation control</p>
+  </header>
+
+  <div class="topbar">
+    <div>
+      <strong id="clock">--:--:--</strong>
+      <div class="small" id="date">Loading date...</div>
+    </div>
+    <button id="themeButton">🌙 Dark Mode</button>
+  </div>
+
+  <div class="dashboard">
+    <div class="card">
+      <h2>Soil Moisture</h2>
+      <div class="value" id="moisture">50%</div>
+      <p id="soilStatus">Soil: Moist</p>
+      <input type="range" id="moistureSlider" min="0" max="100" value="50"
+        aria-label="Simulated soil moisture">
+      <div class="small">Move slider to test readings</div>
+    </div>
+
+    <div class="card">
+      <h2>Temperature</h2>
+      <div class="value" id="temperature">28°C</div>
+      <div class="small">Simulated reading</div>
+    </div>
+
+    <div class="card">
+      <h2>Humidity</h2>
+      <div class="value" id="humidity">60%</div>
+      <div class="small">Simulated reading</div>
+    </div>
+
+    <div class="card">
+      <h2>Water Tank</h2>
+      <div class="value" id="tankValue">80%</div>
+      <input type="range" id="tankSlider" min="0" max="100" value="80"
+        aria-label="Simulated tank level">
+      <p id="tankStatus">Tank level: Good</p>
+    </div>
+
+    <div class="card">
+      <h2>Water Usage</h2>
+      <div class="value"><span id="waterUsage">0.0</span> L</div>
+      <button id="resetUsageButton">Reset Usage</button>
+    </div>
+
+    <div class="card">
+      <h2>🌧️ Rain Detection</h2>
+      <div class="value" id="rainStatus">No Rain</div>
+      <button id="rainButton">Simulate Rain</button>
+      <p class="small">Rain pauses simulated irrigation.</p>
+    </div>
+
+    <div class="card">
+      <h2>💧 Estimated Water Saved</h2>
+      <div class="value"><span id="waterSaved">0.0</span> L</div>
+      <p class="small">Illustrative demo estimate.</p>
+    </div>
+
+    <div class="card">
+      <h2>Plant Status</h2>
+      <div class="value" id="plantHealth">Good</div>
+      <p id="plantMessage">Soil conditions look suitable.</p>
+    </div>
+
+    <div class="card">
+      <h2>🌱 Plant Profile</h2>
+      <label for="plantProfile">Choose your crop</label>
+      <select id="plantProfile">
+        <option value="tomato">Tomato</option>
+        <option value="rice">Rice</option>
+        <option value="chilli">Chilli</option>
+        <option value="groundnut">Groundnut</option>
+      </select>
+      <p class="small" id="profileInfo">Ideal moisture: 50–70%</p>
+      <p class="small">Crop targets are simplified demo settings.</p>
+    </div>
+
+    <div class="card doctor-card">
+      <h2>🩺 Smart Plant Doctor</h2>
+      <div class="value" id="doctorTitle">Checking...</div>
+      <p id="doctorAdvice">Advice will appear here.</p>
+      <button id="doctorButton">Get New Advice</button>
+      <p class="small">Educational advice based on simulated readings.</p>
+    </div>
+  </div>
+
+  <div class="status" id="statusBox" aria-live="polite">System ready</div>
+
+  <div class="pump">
+    <span class="pump-indicator" id="pumpIndicator"></span>
+    <span id="pumpText">Pump: OFF</span>
+  </div>
+
+  <h2 class="section-title">💧 Irrigation Control</h2>
+  <div class="dashboard">
+    <div class="card">
+      <h2>Operating Mode</h2>
+      <button id="autoButton">Automatic</button>
+      <button id="manualButton">Manual</button>
+      <p id="modeText">Mode: Automatic</p>
+      <button id="pumpButton" disabled>Turn Pump ON / OFF</button>
+      <p class="small">Simulated pump only. No real hardware connected.</p>
+    </div>
+
+    <div class="card">
+      <h2>Irrigation Schedule</h2>
+      <label for="scheduleTime">Start time</label>
+      <input type="time" id="scheduleTime" value="06:00">
+      <label for="duration">Duration (minutes)</label>
+      <input type="number" id="duration" min="1" max="60" value="5">
+      <button id="saveScheduleButton">Save Schedule</button>
+      <button id="clearScheduleButton">Clear Schedule</button>
+      <p id="scheduleStatus">No schedule saved</p>
+    </div>
+
+    <div class="card">
+      <h2>Sensor Controls</h2>
+      <button id="randomButton">🔄 Random Reading</button>
+      <button id="csvButton">📥 Download CSV</button>
+      <p class="small">Download simulated sensor history as a CSV file.</p>
+    </div>
+  </div>
+
+  <div class="chart-container">
+    <h2>📈 Soil Moisture Trend</h2>
+    <div class="chart-wrap"><canvas id="moistureChart"></canvas></div>
+  </div>
+
+  <div class="chart-container">
+    <h2>💧 Water Usage Trend</h2>
+    <div class="chart-wrap"><canvas id="waterChart"></canvas></div>
+  </div>
+
+  <div class="footer">
+    Educational project • Simulated data • Not connected to real irrigation equipment
+  </div>
+
+  <script>
+    // Crop targets are simplified demo values, not agronomic recommendations.
+    const plantProfiles = {
+      tomato: {
+        name: "Tomato",
+        low: 30,
+        high: 60,
+        ideal: "50–70%"
+      },
+      rice: {
+        name: "Rice",
+        low: 40,
+        high: 75,
+        ideal: "60–80%"
+      },
+      chilli: {
+        name: "Chilli",
+        low: 30,
+        high: 60,
+        ideal: "50–70%"
+      },
+      groundnut: {
+        name: "Groundnut",
+        low: 25,
+        high: 55,
+        ideal: "45–65%"
+      }
+    };
+
+    // Illustrative demo flow rate. Water usage changes by this amount per minute.
+    const WATER_RATE_L_PER_MIN = 1;
+
+    let mode = "auto";
+    let pumpOn = false;
+    let currentMoisture = 50;
+    let tankLevel = 80;
+    let waterUsage = 0;
+    let waterSaved = 0;
+    let rainDetected = false;
+    let selectedCrop = "tomato";
+    let schedule = null;
+    let scheduleStarted = false;
+    let scheduleStartTimestamp = null;
+    let lastScheduleDate = "";
+    let history = [];
+
+    const $ = id => document.getElementById(id);
+
+    const chartOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { color: "#fff" }
+        },
+        x: {
+          ticks: { color: "#fff", maxRotation: 0 }
+        }
+      },
+      plugins: {
+        legend: { labels: { color: "#fff" } }
+      }
+    };
+
+    const moistureChart = new Chart($("moistureChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [{
+          label: "Soil Moisture (%)",
+          data: [],
+          borderColor: "#ffeb3b",
+          backgroundColor: "rgba(255,235,59,.2)",
+          tension: .3,
+          fill: true
+        }]
+      },
+      options: {
+        ...chartOptions,
+        scales: {
+          ...chartOptions.scales,
+          y: {
+            min: 0,
+            max: 100,
+            ticks: { color: "#fff" }
+          }
+        }
+      }
+    });
+
+    const waterChart = new Chart($("waterChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [{
+          label: "Water Usage (L)",
+          data: [],
+          borderColor: "#80cbc4",
+          backgroundColor: "rgba(128,203,196,.2)",
+          tension: .3,
+          fill: true
+        }]
+      },
+      options: chartOptions
+    });
+
+    function addChartPoint(chart, value) {
+      chart.data.labels.push(new Date().toLocaleTimeString());
+      chart.data.datasets[0].data.push(value);
+
+      if (chart.data.labels.length > 20) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+
+      chart.update();
+    }
+
+    function updateClock() {
+      const now = new Date();
+      $("clock").textContent = now.toLocaleTimeString();
+      $("date").textContent = now.toLocaleDateString(undefined, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      });
+    }
+
+    function saveHistory() {
+      history.push({
+        time: new Date().toLocaleString(),
+        crop: plantProfiles[selectedCrop].name,
+        moisture: currentMoisture,
+        temperature: $("temperature").textContent,
+        humidity: $("humidity").textContent,
+        tank: tankLevel.toFixed(1),
+        rain: rainDetected ? "Yes" : "No",
+        pump: pumpOn ? "ON" : "OFF",
+        usage: waterUsage.toFixed(2),
+        estimatedSaved: waterSaved.toFixed(2)
+      });
+
+      if (history.length > 500) history.shift();
+    }
+
+    function updateSoilStatus() {
+      const crop = plantProfiles[selectedCrop];
+      let soil = "Moist";
+      let health = "Good";
+      let message = "Soil conditions look suitable.";
+
+      if (currentMoisture < crop.low) {
+        soil = "Dry";
+        health = "Needs water";
+        message = "Soil moisture is below the selected crop's demo target.";
+      } else if (currentMoisture >= crop.high) {
+        soil = "Wet";
+        health = "Too wet";
+        message = "Soil moisture is above the selected crop's demo target.";
+      }
+
+      $("soilStatus").textContent = "Soil: " + soil;
+      $("plantHealth").textContent = health;
+      $("plantMessage").textContent = message;
+    }
+
+    function refreshDoctor() {
+      const crop = plantProfiles[selectedCrop];
+      const temperature = parseInt($("temperature").textContent, 10);
+      const humidity = parseInt($("humidity").textContent, 10);
+
+      let title = "Conditions look good";
+      let advice = "Keep monitoring your crop and check the soil regularly.";
+
+      if (rainDetected) {
+        title = "Rain detected";
+        advice = "Irrigation is paused. Check the soil again after the rain.";
+      } else if (tankLevel <= 0) {
+        title = "Tank is empty";
+        advice = "The simulated tank is empty. Refill it before irrigation.";
+      } else if (currentMoisture < crop.low) {
+        title = "Soil may be too dry";
+        advice = crop.name + " may need water. Check the soil before watering.";
+      } else if (currentMoisture >= crop.high) {
+        title = "Soil may be too wet";
+        advice = "Pause watering and check that the soil drains properly.";
+      } else if (temperature >= 35) {
+        title = "Temperature is high";
+        advice = "Monitor the crop during the warm part of the day.";
+      } else if (humidity >= 85) {
+        title = "Humidity is high";
+        advice = "Check airflow around the plants and watch for signs of disease.";
+      }
+
+      $("doctorTitle").textContent = title;
+      $("doctorAdvice").textContent = advice;
+    }
+
+    function changePlantProfile() {
+      selectedCrop = $("plantProfile").value;
+      const crop = plantProfiles[selectedCrop];
+
+      $("profileInfo").textContent =
+        crop.name + " • Ideal moisture: " + crop.ideal;
+
+      updateSoilStatus();
+      applyAutomaticControl();
+      updatePump();
+      refreshDoctor();
+      saveHistory();
+    }
+
+    function applyAutomaticControl() {
+      if (mode !== "auto") return;
+
+      const crop = plantProfiles[selectedCrop];
+
+      if (rainDetected || tankLevel <= 0) {
+        pumpOn = false;
+      } else if (currentMoisture < crop.low) {
+        pumpOn = true;
+      } else if (currentMoisture >= crop.high) {
+        pumpOn = false;
+      }
+    }
+
+    function testMoisture(value) {
+      currentMoisture = Number(value);
+      $("moisture").textContent = currentMoisture + "%";
+
+      updateSoilStatus();
+      applyAutomaticControl();
+      updatePump();
+      refreshDoctor();
+      addChartPoint(moistureChart, currentMoisture);
+      saveHistory();
+    }
+
+    function setTank(value) {
+      tankLevel = Number(value);
+      $("tankValue").textContent = tankLevel.toFixed(1) + "%";
+      $("tankStatus").textContent = tankLevel < 20
+        ? "⚠ Low tank level"
+        : "Tank level: Good";
+
+      applyAutomaticControl();
+      updatePump();
+      refreshDoctor();
+      saveHistory();
+    }
+
+    function setMode(newMode) {
+      mode = newMode;
+      $("modeText").textContent =
+        "Mode: " + (mode === "auto" ? "Automatic" : "Manual");
+      $("pumpButton").disabled = mode !== "manual";
+
+      if (mode === "auto") applyAutomaticControl();
+
+      updatePump();
+      refreshDoctor();
+    }
+
+    function togglePump() {
+      if (mode !== "manual") return;
+
+      if (rainDetected) {
+        $("statusBox").textContent = "🌧️ Rain detected — pump remains paused.";
+        return;
+      }
+
+      if (tankLevel <= 0) {
+        $("statusBox").textContent = "⚠ Tank is empty — pump cannot start.";
+        return;
+      }
+
+      pumpOn = !pumpOn;
+      updatePump();
+      refreshDoctor();
+      saveHistory();
+    }
+
+    function updatePump() {
+      if (rainDetected || tankLevel <= 0) pumpOn = false;
+
+      $("pumpIndicator").className =
+        "pump-indicator " + (pumpOn ? "on" : "");
+      $("pumpText").textContent = "Pump: " + (pumpOn ? "ON" : "OFF");
+
+      const status = $("statusBox");
+
+      if (tankLevel <= 0) {
+        status.className = "status danger";
+        status.textContent = "⚠ Water tank is empty — pump stopped";
+      } else if (tankLevel < 20) {
+        status.className = "status danger";
+        status.textContent = "⚠ Water tank is low";
+      } else if (rainDetected) {
+        status.className = "status warning";
+        status.textContent = "🌧️ Rain detected — irrigation paused";
+      } else if (pumpOn) {
+        status.className = "status warning";
+        status.textContent = "💧 Irrigation is ON";
+      } else {
+        status.className = "status";
+        status.textContent = "✅ System OK — Irrigation is OFF";
+      }
+    }
+
+    function toggleRain() {
+      rainDetected = !rainDetected;
+      $("rainStatus").textContent = rainDetected ? "🌧️ Rain Detected" : "No Rain";
+      $("rainButton").textContent = rainDetected ? "Stop Rain" : "Simulate Rain";
+
+      if (rainDetected) {
+        pumpOn = false;
+      } else {
+        applyAutomaticControl();
+      }
+
+      updatePump();
+      refreshDoctor();
+      saveHistory();
+    }
+
+    function simulateReading() {
+      const moisture = Math.floor(Math.random() * 61) + 10;
+
+      $("moistureSlider").value = moisture;
+      currentMoisture = moisture;
+      $("moisture").textContent = moisture + "%";
+
+      $("temperature").textContent =
+        (20 + Math.floor(Math.random() * 16)) + "°C";
+      $("humidity").textContent =
+        (40 + Math.floor(Math.random() * 41)) + "%";
+
+      updateSoilStatus();
+      applyAutomaticControl();
+      updatePump();
+      refreshDoctor();
+      addChartPoint(moistureChart, moisture);
+      saveHistory();
+    }
+
+    function resetUsage() {
+      waterUsage = 0;
+      $("waterUsage").textContent = "0.0";
+      addChartPoint(waterChart, waterUsage);
+      saveHistory();
+    }
+
+    function toggleDarkMode() {
+      document.body.classList.toggle("dark");
+      const isDark = document.body.classList.contains("dark");
+      $("themeButton").textContent =
+        isDark ? "☀️ Light Mode" : "🌙 Dark Mode";
+    }
+
+    function saveSchedule() {
+      const time = $("scheduleTime").value;
+      const duration = Number($("duration").value);
+
+      if (!time || !Number.isFinite(duration) || duration < 1 || duration > 60) {
+        $("scheduleStatus").textContent =
+          "Enter a valid time and duration (1–60 minutes).";
+        return;
+      }
+
+      schedule = { time, duration };
+      scheduleStarted = false;
+      scheduleStartTimestamp = null;
+      lastScheduleDate = "";
+
+      $("scheduleStatus").textContent =
+        "Scheduled for " + time + " (" + duration + " minutes)";
+    }
+
+    function clearSchedule() {
+      schedule = null;
+      scheduleStarted = false;
+      scheduleStartTimestamp = null;
+      $("scheduleStatus").textContent = "No schedule saved";
+    }
+
+    function checkSchedule() {
+      if (!schedule) return;
+
+      const now = new Date();
+      const today = now.toDateString();
+      const currentTime =
+        String(now.getHours()).padStart(2, "0") + ":" +
+        String(now.getMinutes()).padStart(2, "0");
+
+      if (!scheduleStarted && lastScheduleDate !== today &&
+          currentTime === schedule.time) {
+        lastScheduleDate = today;
+        scheduleStarted = true;
+        scheduleStartTimestamp = Date.now();
+
+        if (mode === "auto" && !rainDetected && tankLevel > 0) {
+          pumpOn = true;
+          $("scheduleStatus").textContent = "Scheduled irrigation started.";
+        } else {
+          $("scheduleStatus").textContent =
+            "Schedule reached, but irrigation is paused. Check mode, rain, or tank.";
+        }
+
+        updatePump();
+        refreshDoctor();
+        saveHistory();
+      }
+
+      if (scheduleStarted && scheduleStartTimestamp !== null) {
+        const elapsed = (Date.now() - scheduleStartTimestamp) / 60000;
+
+        if (elapsed >= schedule.duration) {
+          scheduleStarted = false;
+          scheduleStartTimestamp = null;
+          schedule = null;
+
+          applyAutomaticControl();
+          updatePump();
+          refreshDoctor();
+          $("scheduleStatus").textContent = "Scheduled irrigation completed.";
+          saveHistory();
+        }
+      }
+    }
+
+    function downloadCSV() {
+      if (history.length === 0) {
+        alert("No sensor readings available yet.");
+        return;
+      }
+
+      const headers = [
+        "Time", "Crop", "Soil Moisture (%)", "Temperature", "Humidity",
+        "Tank Level (%)", "Rain", "Pump", "Water Usage (L)",
+        "Estimated Water Saved (L)"
+      ];
+
+      const rows = history.map(row => [
+        row.time, row.crop, row.moisture, row.temperature, row.humidity,
+        row.tank, row.rain, row.pump, row.usage, row.estimatedSaved
+      ]);
+
+      const csv = [headers, ...rows].map(row =>
+        row.map(value => '"' + String(value).replace(/"/g, '""') + '"').join(",")
+      ).join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = "irrigation-readings.csv";
+      link.click();
+
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    // Connect controls.
+    $("moistureSlider").addEventListener("input", event => {
+      testMoisture(event.target.value);
+    });
+
+    $("tankSlider").addEventListener("input", event => {
+      setTank(event.target.value);
+    });
+
+    $("plantProfile").addEventListener("change", changePlantProfile);
+    $("doctorButton").addEventListener("click", refreshDoctor);
+    $("themeButton").addEventListener("click", toggleDarkMode);
+    $("resetUsageButton").addEventListener("click", resetUsage);
+    $("rainButton").addEventListener("click", toggleRain);
+    $("autoButton").addEventListener("click", () => setMode("auto"));
+    $("manualButton").addEventListener("click", () => setMode("manual"));
+    $("pumpButton").addEventListener("click", togglePump);
+    $("randomButton").addEventListener("click", simulateReading);
+    $("csvButton").addEventListener("click", downloadCSV);
+    $("saveScheduleButton").addEventListener("click", saveSchedule);
+    $("clearScheduleButton").addEventListener("click", clearSchedule);
+
+    // Initial display.
+    updateClock();
+    updateSoilStatus();
+    updatePump();
+    refreshDoctor();
+    addChartPoint(moistureChart, currentMoisture);
+    addChartPoint(waterChart, waterUsage);
+    saveHistory();
+
+    setInterval(updateClock, 1000);
+    setInterval(simulateReading, 10000);
+    setInterval(checkSchedule, 1000);
+
+    // Simulated water usage and estimated rain-related savings.
+    setInterval(() => {
+      if (rainDetected && mode === "auto" &&
+          currentMoisture < plantProfiles[selectedCrop].low) {
+        waterSaved += WATER_RATE_L_PER_MIN / 60;
+        $("waterSaved").textContent = waterSaved.toFixed(1);
+      }
+
+      if (pumpOn && tankLevel > 0 && !rainDetected) {
+        waterUsage += WATER_RATE_L_PER_MIN / 60;
+        tankLevel = Math.max(0, tankLevel - 0.02);
+
+        $("waterUsage").textContent = waterUsage.toFixed(1);
+        $("tankSlider").value = tankLevel;
+        $("tankValue").textContent = tankLevel.toFixed(1) + "%";
+        $("tankStatus").textContent = tankLevel < 20
+          ? "⚠ Low tank level"
+          : "Tank level: Good";
+
+        if (tankLevel <= 0) {
+          tankLevel = 0;
+          pumpOn = false;
+        }
+
+        updatePump();
+        refreshDoctor();
+        addChartPoint(waterChart, waterUsage);
+        saveHistory();
+      }
+    }, 1000);
+  </script>
+</body>
+</html>
